@@ -942,7 +942,19 @@ void BundleAgent::recvDisruption(Packet * p){
 *	处理广播Hello数据包，维护邻居列表
 */
 void BundleAgent::recvHello(Packet * p){
-	
+	struct hdr_aodv_reply *rp = HDR_AODV_REPLY(p);
+	AODV_Neighbor *nb;
+
+	nb = nb_lookup(rp->rp_dst);
+	if(nb == 0) {
+	  nb_insert(rp->rp_dst);
+	}
+	else {
+	  nb->nb_expire = CURRENT_TIME +
+	                  (1.5 * ALLOWED_HELLO_LOSS * HELLO_INTERVAL);
+	}
+
+	Packet::free(p);
 }
 
 /*
@@ -965,8 +977,12 @@ Packet* BundleAgent::process_for_reassembly(int bundle_id){
 */
 void BundleAgent::check_bundle(Packet * p){
 	hdr_bundle* bh=hdr_bundle::access(p);
-
-	if(bh->
+	hdr_ip* iph=hdr_ip::access(p);
+	
+	if(iph->daddr() == here_.addr_)
+		myBundleStore.enque(p);
+	else
+		midBundleBuffer.enque(p);
 }
 
 void Umatrix::increaseCal(Umatrix &matrix, double increase, int orient){
@@ -978,20 +994,58 @@ void Umatrix::increaseCal(Umatrix &matrix, double increase, int orient){
 }
 
 /*
-*	普通效用值计算，按周期计算
+*	效用值计算，按周期计算【@!@还未考虑地图】
 */
-void Umatrix::uvalue_block_cal(int orient){
+void Umatrix::uvalue_block_cal(){
+	//获取节点速度和方向矢量
+	double dx = 0.0, dy = 0.0, dz = 0.0; //
+	Node *thisnode; // 
+	thisnode = Node::get_node_by_address(index);
+	double speed = ((MobileNode *)thisnode)->speed();
+	((MobileNode *)thisnode)->getVelo(&dx, &dy, &dz);
+	//通过方向矢量计算出对应块值
+	int orient;
+	double tempOrient = 0.0;
+	if(dy > 0){
+		tempOrient = atan2(dy,dx);
+		if (tempOrient < PI/6)
+			orient = 0;
+		else if(tempOrient <= PI/3)
+			orient = 1;
+		else if(tempOrient <= PI/2)
+			orient = 2;
+		else if(tempOrient <= PI*2/3)
+			orient = 3;
+		else if(tempOrient <= PI*5/6)
+			orient = 4;
+		else if(tempOrient <= PI)
+			orient = 5;
+	}else{
+		tempOrient = atan2(abs(dy),dx);
+		if (tempOrient < PI/6)
+			orient = 11;
+		else if(tempOrient <= PI/3)
+			orient = 10;
+		else if(tempOrient <= PI/2)
+			orient = 9;
+		else if(tempOrient <= PI*2/3)
+			orient = 8;
+		else if(tempOrient <= PI*5/6)
+			orient = 7;
+		else if(tempOrient <= PI)
+			orient = 6;
+	}
 	double dTemple = getUtilValue(orient);
 	double dA = exp(0.7*dTemple*dTemple)-0.5;
-	dTemple += dA * V;
+	dTemple += dA * speed;
 	//算上衰减
 	if (dTemple<1)
 	{
-		setUtilValue(UP, dTemple);
+		setUtilValue(orient, dTemple);
 	}
-	increaseCal(dA*V, UP);
+	increaseCal(dA*speed, orient);
 	decayCal2();
-	decayCal(dA*V, UP);
+	decayCal(dA*speed, orient);
 	synCal();
 	
 }

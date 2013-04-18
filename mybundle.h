@@ -12,6 +12,7 @@
 #include "random.h"
 
 #include <map>
+#include <cmath>
 
 #define TYPE_DATA   1
 #define TYPE_ACK    2
@@ -19,17 +20,30 @@
 #define TYPE_DISRU  4 //断路
 #define TYPE_NAK    5 //重传请求
 
+#define PI          3.1416
+#define BLOCK 12
+#define V 0.02	//速度
+#define L_UP 300	//每条路长1010s
+#define L_RIGHT 300
+#define DERATE 0.25
+#define DERATE_T 0.1
+#define CON_DERATE 0.985
 
+#define UP 2
+#define RIGHT 11
+#define DOWN 8
+#define LEFT 5
 
 
 struct hdr_bundle {
     int bundle_id; ///< 用来标识一个bundle ，for fragments
     bool is_fragment; //标识是否是分片
-    double  utiValue[BLOCK]; //综合效用值
-    double  locX;
-    double  locY;
-    double  locZ;
-    double  speed;
+    struct {
+        double  utiValue[BLOCK]; //综合效用值
+        double  locX;
+        double  locY;
+        double  speed;
+    }node_info;
   double originating_timestamp;
   double initial_timestamp;
   double lifetime;
@@ -90,20 +104,6 @@ class BundleTimer : public TimerHandler {
   BundleAgent* a_;
 };
 
-#define BLOCK 12
-#define V 0.02	//速度
-#define L_UP 300	//每条路长1010s
-#define L_RIGHT 300
-#define DERATE 0.25
-#define DERATE_T 0.1
-#define CON_DERATE 0.985
-
-#define UP 2
-#define RIGHT 11
-#define DOWN 8
-#define LEFT 5
-
-
 class Umatrix
 {
 public:
@@ -113,7 +113,7 @@ public:
 			m_synValue[i] = 0.0;
 		}
 	}
-	void uvalue_block_cal(int orient);
+	void uvalue_block_cal();
 	void synCal();
 	void increaseCal(double increase, int orient);
 	void decayCal(double increase, int orient);
@@ -208,7 +208,7 @@ class BundleAgent : public Agent {
   PacketQueue* reTxBundleBuffer;
   PacketQueue* mgmntBundleBuffer;
     
-    int duplicateFrag;
+    int duplicateFrag; //重复收到的分片计数
 
 public:
 
@@ -225,6 +225,8 @@ private:
     PacketQueue* myBundleStore;
 	PacketQueue* midBundleBuffer;
     Umatrix utiMatrix;
+    double speed;
+    
     
         
   MyHelloTimer helloTimer_;  
